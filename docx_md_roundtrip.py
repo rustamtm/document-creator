@@ -49,6 +49,25 @@ def check_pandoc() -> None:
         sys.exit("pandoc not found on PATH. Please install pandoc and try again.")
 
 
+def pandoc_heading_arg() -> str:
+    """Return the appropriate pandoc flag for ATX-style headings."""
+    try:
+        p = subprocess.run(
+            ["pandoc", "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True,
+        )
+        version = p.stdout.splitlines()[0].split()[1]
+        major = int(version.split(".")[0])
+        if major >= 3:
+            return "--markdown-headings=atx"
+    except Exception:
+        pass
+    return "--atx-headers"
+
+
 def slug_token(name: str) -> str:
     """
     Convert a Word style name into a safe token we can round‑trip through HTML classes.
@@ -240,9 +259,9 @@ def docx_to_md(input_docx: Path, out_md: Path, media_dir: Path) -> Path:
     cmd = [
         "pandoc",
         "--from=html",
-        "--to=markdown+attributes+bracketed_spans+fenced_divs+pipe_tables",
+        "--to=markdown+bracketed_spans+fenced_divs+pipe_tables+header_attributes",
         "--wrap=none",
-        "--atx-headers",
+        pandoc_heading_arg(),
         f"--metadata-file={meta_file}",
         f"--lua-filter={lua_filter}",
         "-o",
@@ -270,7 +289,7 @@ def md_to_docx(in_md: Path, out_docx: Path, reference_docx: Path | None = None) 
     cmd = [
         "pandoc",
         str(in_md),
-        "--from=markdown+attributes+bracketed_spans+fenced_divs+pipe_tables",
+        "--from=markdown+bracketed_spans+fenced_divs+pipe_tables+header_attributes",
         "--to=docx",
         "--wrap=none",
         f"--lua-filter={lua_filter}",
