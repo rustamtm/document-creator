@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Document Converter</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    #preview { border: 1px solid #ccc; padding: 1em; min-height: 200px; }
+    #download { display: none; margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Document Converter</h1>
+  <form id="convert-form">
+    <input type="file" id="file" name="file" required />
+    <select id="direction" name="direction">
+      <option value="to-md">DOCX to Markdown</option>
+      <option value="to-docx">Markdown to DOCX</option>
+    </select>
+    <button type="submit">Convert</button>
+  </form>
+  <a id="download">Download result</a>
+  <h2>Preview</h2>
+  <div id="preview"></div>
+  <script>
+    const form = document.getElementById('convert-form');
+    const fileInput = document.getElementById('file');
+    const directionSelect = document.getElementById('direction');
+    const preview = document.getElementById('preview');
+    const downloadLink = document.getElementById('download');
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file && file.name.endsWith('.md')) {
+        const reader = new FileReader();
+        reader.onload = e => {
+          preview.innerHTML = marked.parse(e.target.result);
+        };
+        reader.readAsText(file);
+      } else {
+        preview.innerHTML = '';
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = fileInput.files[0];
+      const direction = directionSelect.value;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('direction', direction);
+      const res = await fetch('/convert', { method: 'POST', body: formData });
+      if (direction === 'to-md') {
+        const data = await res.json();
+        preview.innerHTML = marked.parse(data.content);
+        downloadLink.href = 'data:text/markdown;charset=utf-8,' + encodeURIComponent(data.content);
+        downloadLink.download = 'output.md';
+        downloadLink.style.display = 'inline';
+        downloadLink.textContent = 'Download Markdown';
+      } else {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        downloadLink.href = url;
+        downloadLink.download = 'output.docx';
+        downloadLink.style.display = 'inline';
+        downloadLink.textContent = 'Download DOCX';
+      }
+    });
+  </script>
+</body>
+</html>
