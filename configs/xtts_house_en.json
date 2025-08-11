@@ -1,0 +1,33 @@
+{
+  "model": "xtts_v2",
+  "run_name": "house_en_xtts",
+  "project_name": "house_voice",
+  "output_path": "runs/house_en_xtts",
+  "batch_size": 16,
+  "eval_batch_size": 16,
+  "epochs": 200,
+  "lr": 1e-4,
+  "mixed_precision": true,
+  "audio": {
+    "sample_rate": 22050,
+    "do_trim_silence": true,
+    "trim_db": 45
+  },
+  "use_phonemes": true,
+  "phonemizer": "espeak",
+  "phoneme_language": "en",
+  "datasets": [{
+    "name": "house_en",
+    "path": "data/house_en",
+    "meta_file_train": "metadata_train.csv",
+    "meta_file_val": "metadata_val.csv",
+    "language": "en"
+  }],
+  "num_loader_workers": 4,
+  "lr_scheduler": "ExponentialLR",
+  "lr_scheduler_params": { "gamma": 0.9995 },
+  "grad_clip": [5.0, 5.0],
+  "save_n_checkpoints": 5,
+  "save_best_after": 2000,
+  "run_eval": true
+}
