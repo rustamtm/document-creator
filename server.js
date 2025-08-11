@@ -1,15 +1,31 @@
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
 
 const app = express();
 app.use(express.json());
+app.use(cors());
+
 const upload = multer({ dest: 'uploads/' });
 
 app.use(express.static('public'));
 app.use('/media', express.static('media'));
+app.use('/runs', express.static('runs'));
+
+const apiKey = process.env.API_KEY;
+const apiKeyMiddleware = (req, res, next) => {
+  if (!apiKey) return next();
+  if (req.get('X-API-Key') !== apiKey) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  next();
+};
+
+app.use('/api', apiKeyMiddleware);
 
 app.post('/convert', upload.single('file'), (req, res) => {
   const file = req.file;
@@ -63,6 +79,9 @@ app.post('/api/tts', (req, res) => {
     res.json({ audio: outputFile });
   });
 });
+
+const training = require('./routes/training');
+app.use('/api', training);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

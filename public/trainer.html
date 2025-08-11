@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XTTS Trainer</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    #logPanel { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  </style>
+</head>
+<body>
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-8 py-3">
+      <h1 class="mb-4">XTTS Trainer</h1>
+      <div class="mb-3">
+        <label class="form-label">API Key</label>
+        <input type="password" class="form-control" id="apiKey">
+      </div>
+      <section id="dataset" class="mb-4">
+        <h2>Dataset</h2>
+        <form id="uploadForm" class="row g-2">
+          <div class="col-12">
+            <input type="file" class="form-control" name="audio[]" id="audio" multiple>
+          </div>
+          <div class="col-12">
+            <input type="file" class="form-control" name="transcripts" id="transcripts" accept=".tsv,.txt">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Upload</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="prep" class="mb-4">
+        <h2>Preprocess</h2>
+        <form id="prepForm" class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Output Dir</label>
+            <input type="text" class="form-control" id="outputDir" value="data/house_en">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Speaker</label>
+            <input type="text" class="form-control" id="speaker" value="spk1">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Sample Rate</label>
+            <input type="number" class="form-control" id="sampleRate" value="22050">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Max Len</label>
+            <input type="number" step="0.1" class="form-control" id="maxLen" value="15">
+          </div>
+          <div class="col-md-2 d-flex align-items-center">
+            <div class="form-check mt-3">
+              <input class="form-check-input" type="checkbox" id="vad" checked>
+              <label class="form-check-label" for="vad">VAD</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Run Prep</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="training" class="mb-4">
+        <h2>Training</h2>
+        <form id="trainForm" class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Config Path</label>
+            <input type="text" class="form-control" id="configPath" value="configs/xtts_house_en.json">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Run Name</label>
+            <input type="text" class="form-control" id="runName" value="house_en_xtts">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-danger" type="submit">Start Training</button>
+            <span id="statusBadge" class="badge bg-secondary ms-2">idle</span>
+          </div>
+        </form>
+        <pre id="trainLog" class="bg-dark text-white p-2 mt-2" style="height:200px; overflow:auto;"></pre>
+      </section>
+
+      <section id="artifacts" class="mb-4">
+        <h2>Artifacts</h2>
+        <button id="refreshArtifacts" class="btn btn-secondary mb-2">Refresh</button>
+        <table class="table table-sm" id="artifactTable">
+          <thead><tr><th>Path</th><th>Size</th><th>Modified</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section id="quicktts" class="mb-4">
+        <h2>Quick TTS</h2>
+        <form id="ttsForm" class="row g-2">
+          <div class="col-12">
+            <textarea class="form-control" id="ttsText" rows="3" placeholder="Enter text..."></textarea>
+          </div>
+          <div class="col-md-4">
+            <input type="text" class="form-control" id="ttsLang" value="en">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Synthesize</button>
+          </div>
+        </form>
+        <audio id="ttsAudio" controls class="mt-2 w-100" style="display:none"></audio>
+      </section>
+
+      <section id="system" class="mb-4">
+        <h2>System</h2>
+        <button id="sysBtn" class="btn btn-secondary mb-2">Query GPU</button>
+        <pre id="sysInfo" class="p-2 bg-light"></pre>
+      </section>
+    </div>
+    <div class="col-md-4 border-start bg-light" id="logPanel">
+      <h5 class="p-3">Logs</h5>
+      <pre id="logs" class="p-3"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
+  <div id="toast" class="toast" role="alert"><div class="toast-body"></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const apiKeyInput = document.getElementById('apiKey');
+apiKeyInput.value = localStorage.getItem('apiKey') || '';
+apiKeyInput.addEventListener('change', () => localStorage.setItem('apiKey', apiKeyInput.value));
+function authHeaders() {
+  const key = apiKeyInput.value;
+  return key ? { 'X-API-Key': key } : {};
+}
+function showToast(msg, ok=true) {
+  const el = document.getElementById('toast');
+  el.className = ok ? 'toast text-bg-success' : 'toast text-bg-danger';
+  el.querySelector('.toast-body').textContent = msg;
+  new bootstrap.Toast(el).show();
+}
+
+// Upload dataset
+const uploadForm = document.getElementById('uploadForm');
+uploadForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(uploadForm);
+  try {
+    const res = await fetch('/api/data/upload', { method: 'POST', body: fd, headers: authHeaders() });
+    const json = await res.json();
+    if (json.ok) {
+      showToast(`Uploaded ${json.count} files`);
+    } else {
+      showToast(json.error || 'Upload failed', false);
+    }
+  } catch (err) {
+    showToast('Upload failed', false);
+  }
+});
+
+// Preprocess
+const prepForm = document.getElementById('prepForm');
+prepForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    inputDir: 'uploads/raw_audio',
+    transcriptFile: 'uploads/transcripts.tsv',
+    outputDir: document.getElementById('outputDir').value,
+    speaker: document.getElementById('speaker').value,
+    language: 'en',
+    sampleRate: Number(document.getElementById('sampleRate').value),
+    maxLen: Number(document.getElementById('maxLen').value),
+    vad: document.getElementById('vad').checked
+  };
+  try {
+    const res = await fetch('/api/data/prep', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
+    const json = await res.json();
+    if (json.ok) {
+      showToast(`Prepared ${json.clips} clips`);
+    } else {
+      showToast(json.error || 'Prep failed', false);
+    }
+  } catch (err) {
+    showToast('Prep failed', false);
+  }
+});
+
+// Training
+let currentJob = null;
+const trainForm = document.getElementById('trainForm');
+trainForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    configPath: document.getElementById('configPath').value,
+    runName: document.getElementById('runName').value
+  };
+  try {
+    const res = await fetch('/api/train/start', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
+    const json = await res.json();
+    if (json.ok) {
+      currentJob = json.jobId;
+      showToast('Training started');
+      document.getElementById('statusBadge').textContent = 'running';
+    } else {
+      showToast(json.error || 'Start failed', false);
+    }
+  } catch (err) {
+    showToast('Start failed', false);
+  }
+});
+
+async function pollStatus() {
+  if (!currentJob) return;
+  try {
+    const res = await fetch(`/api/train/status?jobId=${currentJob}`, { headers: authHeaders() });
+    const json = await res.json();
+    if (json.ok) {
+      document.getElementById('statusBadge').textContent = json.status;
+      document.getElementById('trainLog').textContent = json.logTail || '';
+      document.getElementById('logs').textContent = json.logTail || '';
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+setInterval(pollStatus, 2000);
+
+// Artifacts
+async function loadArtifacts() {
+  try {
+    const res = await fetch('/api/artifacts', { headers: authHeaders() });
+    const json = await res.json();
+    const tbody = document.querySelector('#artifactTable tbody');
+    tbody.innerHTML = '';
+    if (json.items) {
+      for (const item of json.items) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><a href="/${item.path}" target="_blank">${item.path}</a></td><td>${item.bytes}</td><td>${item.mtime}</td>`;
+        tbody.appendChild(tr);
+      }
+    }
+  } catch (err) {
+    showToast('Failed to load artifacts', false);
+  }
+}
+document.getElementById('refreshArtifacts').addEventListener('click', loadArtifacts);
+
+// Quick TTS
+const ttsForm = document.getElementById('ttsForm');
+ttsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = { text: document.getElementById('ttsText').value, language: document.getElementById('ttsLang').value };
+  try {
+    const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(body) });
+    const json = await res.json();
+    if (json.audio) {
+      const audio = document.getElementById('ttsAudio');
+      audio.src = '/' + json.audio;
+      audio.style.display = 'block';
+      audio.play();
+    } else {
+      showToast('TTS failed', false);
+    }
+  } catch (err) {
+    showToast('TTS failed', false);
+  }
+});
+
+// System info
+const sysBtn = document.getElementById('sysBtn');
+sysBtn.addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/system/gpu', { headers: authHeaders() });
+    const json = await res.json();
+    document.getElementById('sysInfo').textContent = JSON.stringify(json.info || {}, null, 2);
+  } catch (err) {
+    showToast('System query failed', false);
+  }
+});
+</script>
+</body>
+</html>

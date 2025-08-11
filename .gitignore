@@ -1,2 +1,14 @@
 node_modules/
-uploads/
+
+# Ignore generated data but keep placeholder files
+uploads/*
+!uploads/.gitkeep
+!uploads/raw_audio/
+uploads/raw_audio/*
+!uploads/raw_audio/.gitkeep
+
+runs/*
+!runs/.gitkeep
+
+logs/*
+!logs/.gitkeep
