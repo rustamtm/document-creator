@@ -1,7 +1,7 @@
 """Prepare dataset for XTTS fine-tuning.
 
 This script normalizes audio loudness, optionally segments long files
-using VAD from faster-whisper, and writes a metadata.csv file in the
+using VAD from Whisper, and writes a metadata.csv file in the
 format required by Coqui TTS:
 
     wavs/0001.wav|Some text here.|spk1|en
@@ -21,14 +21,12 @@ import csv
 from pathlib import Path
 from typing import Iterable, List, Tuple
 
-import numpy as np
-import soundfile as sf
 from pydub import AudioSegment
 
 try:
-    from faster_whisper import WhisperModel
+    import whisper
 except ImportError:  # pragma: no cover - optional dependency
-    WhisperModel = None
+    whisper = None
 
 
 def load_transcripts(path: Path) -> List[Tuple[str, str]]:
@@ -48,24 +46,36 @@ def normalize(segment: AudioSegment, target_dbfs: float = -20.0) -> AudioSegment
     return segment.apply_gain(change)
 
 
-def save_audio(segment: AudioSegment, path: Path, sample_rate: int) -> None:
-    segment = segment.set_frame_rate(sample_rate).set_channels(1).set_sample_width(2)
+TARGET_SAMPLE_RATE = 22050
+
+
+def save_audio(segment: AudioSegment, path: Path) -> None:
+    segment = (
+        segment.set_frame_rate(TARGET_SAMPLE_RATE)
+        .set_channels(1)
+        .set_sample_width(2)
+    )
     segment.export(path, format="wav")
 
 
-def maybe_split(path: Path, max_len: float, model: WhisperModel | None) -> Iterable[AudioSegment]:
+def maybe_split(
+    path: Path, max_len: float, model, fallback_text: str
+) -> Iterable[Tuple[AudioSegment, str]]:
     segment = AudioSegment.from_file(path)
-    if len(segment) / 1000 <= max_len or model is None:
-        yield segment
+    if model is None:
+        yield segment, fallback_text
         return
-    # Use faster-whisper VAD to find voiced regions
-    audio, sr = sf.read(path)
-    segments, _ = model.transcribe(audio, language="en", vad_filter=True)
+
+    result = model.transcribe(str(path))
+    segments = result.get("segments", [])
+    if not segments:
+        yield segment, result.get("text", fallback_text).strip()
+        return
     for s in segments:
-        start = int(s.start * 1000)
-        end = int(s.end * 1000)
+        start = int(s["start"] * 1000)
+        end = int(s["end"] * 1000)
         if (end - start) / 1000 <= max_len + 0.1:
-            yield segment[start:end]
+            yield segment[start:end], s["text"].strip()
 
 
 def main(args: argparse.Namespace) -> None:
@@ -77,8 +87,8 @@ def main(args: argparse.Namespace) -> None:
     transcripts = load_transcripts(Path(args.transcript_file))
 
     model = None
-    if args.vad and WhisperModel is not None:
-        model = WhisperModel("tiny", device="cpu")
+    if args.vad and whisper is not None:
+        model = whisper.load_model("base")
 
     metadata_path = out_dir / "metadata.csv"
     with metadata_path.open("w", encoding="utf-8", newline="") as f:
@@ -89,11 +99,11 @@ def main(args: argparse.Namespace) -> None:
             if not audio_path.exists():
                 print(f"Warning: missing {audio_path}")
                 continue
-            for chunk in maybe_split(audio_path, args.max_len, model):
+            for chunk, chunk_text in maybe_split(audio_path, args.max_len, model, text):
                 chunk = normalize(chunk)
                 out_path = wav_dir / f"{index:04d}.wav"
-                save_audio(chunk, out_path, args.sample_rate)
-                writer.writerow([f"wavs/{out_path.name}", text, args.speaker, args.language])
+                save_audio(chunk, out_path)
+                writer.writerow([f"wavs/{out_path.name}", chunk_text or text, args.speaker, args.language])
                 index += 1
     print(f"Wrote {index-1} clips to {metadata_path}")
 
@@ -105,7 +115,6 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", required=True, help="Output dataset directory")
     parser.add_argument("--speaker", default="spk1", help="Speaker id")
     parser.add_argument("--language", default="en", help="Language code")
-    parser.add_argument("--sample-rate", type=int, default=22050, help="Target sample rate")
     parser.add_argument("--max-len", type=float, default=15.0, help="Max clip length in seconds")
     parser.add_argument("--vad", action="store_true", help="Use VAD to split long files")
     main(parser.parse_args())
