@@ -1,5 +1,5 @@
 const { Worker } = require('bullmq');
-const { connection } = require('../queues');
+const connection = require('../queues/redis');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
