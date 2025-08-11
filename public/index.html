@@ -2,28 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Document Converter</title>
+  <title>Document Creator</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 2em; }
+    nav a { margin-right: 1em; }
+    section { margin-top: 2em; }
     #preview { border: 1px solid #ccc; padding: 1em; min-height: 200px; }
     #download { display: none; margin-top: 1em; }
   </style>
 </head>
 <body>
-  <h1>Document Converter</h1>
-  <form id="convert-form">
-    <input type="file" id="file" name="file" required />
-    <select id="direction" name="direction">
-      <option value="to-md">DOCX to Markdown</option>
-      <option value="to-docx">Markdown to DOCX</option>
-    </select>
-    <button type="submit">Convert</button>
-  </form>
-  <a id="download">Download result</a>
-  <h2>Preview</h2>
-  <div id="preview"></div>
+  <h1>Document Creator</h1>
+  <nav>
+    <a href="#convert">Convert</a>
+    <a href="#tts">Text-to-Speech</a>
+    <a href="#training">Training</a>
+    <a href="#health">System Health</a>
+  </nav>
+
+  <section id="convert">
+    <h2>Document Converter</h2>
+    <form id="convert-form">
+      <input type="file" id="file" name="file" required />
+      <select id="direction" name="direction">
+        <option value="to-md">DOCX to Markdown</option>
+        <option value="to-docx">Markdown to DOCX</option>
+      </select>
+      <button type="submit">Convert</button>
+    </form>
+    <a id="download">Download result</a>
+    <h3>Preview</h3>
+    <div id="preview"></div>
+  </section>
+
+  <section id="tts">
+    <h2>Text to Speech</h2>
+    <textarea id="ttsText" rows="3" placeholder="Enter text..."></textarea><br/>
+    <button id="ttsBtn">Synthesize</button>
+    <audio id="ttsAudio" controls style="display:none;margin-top:1em;"></audio>
+  </section>
+
+  <section id="training">
+    <h2>Model Training</h2>
+    <p>Upload datasets, preprocess audio, and fine‑tune XTTS voices. Open the <a href="trainer.html">training dashboard</a> to manage jobs and view logs.</p>
+  </section>
+
+  <section id="health">
+    <h2>System Health</h2>
+    <button id="healthBtn">Check</button>
+    <pre id="healthOut"></pre>
+  </section>
+
   <script>
+    // Document converter
     const form = document.getElementById('convert-form');
     const fileInput = document.getElementById('file');
     const directionSelect = document.getElementById('direction');
@@ -34,7 +66,7 @@
       const file = fileInput.files[0];
       if (file && file.name.endsWith('.md')) {
         const reader = new FileReader();
-        reader.onload = e => {
+        reader.onload = (e) => {
           preview.innerHTML = marked.parse(e.target.result);
         };
         reader.readAsText(file);
@@ -66,6 +98,33 @@
         downloadLink.style.display = 'inline';
         downloadLink.textContent = 'Download DOCX';
       }
+    });
+
+    // Text to speech
+    const ttsBtn = document.getElementById('ttsBtn');
+    const ttsText = document.getElementById('ttsText');
+    const ttsAudio = document.getElementById('ttsAudio');
+    ttsBtn.addEventListener('click', async () => {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: ttsText.value })
+      });
+      const json = await res.json();
+      if (json.audio) {
+        ttsAudio.src = '/' + json.audio;
+        ttsAudio.style.display = 'block';
+        ttsAudio.play();
+      }
+    });
+
+    // System health
+    const healthBtn = document.getElementById('healthBtn');
+    const healthOut = document.getElementById('healthOut');
+    healthBtn.addEventListener('click', async () => {
+      const res = await fetch('/api/health');
+      const json = await res.json();
+      healthOut.textContent = JSON.stringify(json, null, 2);
     });
   </script>
 </body>
