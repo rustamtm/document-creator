@@ -5,10 +5,33 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const client = require('prom-client');
+const { logger, requestIdMiddleware, httpLogger } = require('./utils/logger');
 
 const app = express();
+app.use(requestIdMiddleware);
+app.use(httpLogger);
+app.use(helmet());
 app.use(express.json());
 app.use(cors());
+const limiter = rateLimit({ windowMs: 60 * 1000, max: 100 });
+app.use('/api', limiter);
+
+client.collectDefaultMetrics();
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_ms',
+  help: 'Duration of HTTP requests in ms',
+  labelNames: ['method', 'route', 'code'],
+});
+app.use((req, res, next) => {
+  const end = httpRequestDuration.startTimer();
+  res.on('finish', () => {
+    end({ method: req.method, route: req.path, code: res.statusCode });
+  });
+  next();
+});
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -80,10 +103,31 @@ app.post('/api/tts', (req, res) => {
   });
 });
 
-const training = require('./routes/training');
-app.use('/api', training);
+ const training = require('./routes/training');
+ app.use('/api', training);
+ const jobs = require('./routes/jobs');
+ app.use('/api/jobs', jobs);
+
+ app.get('/api/health', (req, res) => {
+    let python = '';
+    try {
+      const out = require('child_process').spawnSync(
+        process.env.COQUI_PY || 'python3',
+        ['-c', "import sys,json; print(json.dumps({'python': sys.version.split()[0]}))"]
+      );
+      python = JSON.parse(out.stdout.toString()).python;
+    } catch (e) {
+      python = 'unknown';
+    }
+    res.json({ ok: true, versions: { node: process.version, python } });
+  });
+
+  app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', client.register.contentType);
+    res.end(await client.register.metrics());
+  });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info(`Server running on port ${PORT}`);
 });
