@@ -1,8 +1,15 @@
 const { Worker } = require('bullmq');
 const connection = require('../queues/redis');
+const { logger } = require('../utils/logger');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+
+if (!connection) {
+  logger.warn('Redis connection not available, prep worker disabled');
+  module.exports = null;
+  return;
+}
 
 const worker = new Worker(
   'prep',
