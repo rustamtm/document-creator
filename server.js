@@ -1,4 +1,6 @@
 require('dotenv').config();
+require('./workers/train');
+require('./workers/prep');
 const express = require('express');
 const multer = require('multer');
 const { spawn } = require('child_process');
