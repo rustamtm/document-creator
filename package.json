@@ -20,6 +20,19 @@
     "adm-zip": "^0.5.10",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express-rate-limit": "^6.11.2"
+    "express-rate-limit": "^6.11.2",
+    "bullmq": "^5.7.14",
+    "ioredis": "^5.4.1",
+    "helmet": "^7.1.0",
+    "zod": "^3.22.4",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1",
+    "morgan": "^1.10.0",
+    "prom-client": "^14.2.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
   }
 }
