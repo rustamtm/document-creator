@@ -21,6 +21,7 @@
     "path": "data/house_en",
     "meta_file_train": "metadata_train.csv",
     "meta_file_val": "metadata_val.csv",
+    "meta_file_test": "metadata_test.csv",
     "language": "en"
   }],
   "num_loader_workers": 4,

@@ -49,6 +49,12 @@ app.post('/api/tts', (req, res) => {
   const outputFile = path.join('media', `tts_${Date.now()}.wav`);
   const python = process.env.COQUI_PY || 'python3';
   const args = ['scripts/run_xtts.py', '--text', text, '--out', outputFile, '--model-path', modelPath, '--config-path', configPath];
+  if (process.env.TTS_DEESSER === '1' || process.env.TTS_DEESSER === 'true') {
+    args.push('--deesser');
+  }
+  if (process.env.TTS_LUFS) {
+    args.push('--lufs', process.env.TTS_LUFS);
+  }
   const py = spawn(python, args);
   py.on('close', (code) => {
     if (code !== 0) {
