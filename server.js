@@ -1,6 +1,4 @@
 require('dotenv').config();
-require('./workers/train');
-require('./workers/prep');
 const express = require('express');
 const multer = require('multer');
 const { spawn } = require('child_process');
@@ -11,6 +9,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const client = require('prom-client');
 const { logger, requestIdMiddleware, httpLogger } = require('./utils/logger');
+const redis = require('./queues/redis');
 
 const app = express();
 app.use(requestIdMiddleware);
@@ -105,29 +104,47 @@ app.post('/api/tts', (req, res) => {
   });
 });
 
- const training = require('./routes/training');
- app.use('/api', training);
- const jobs = require('./routes/jobs');
- app.use('/api/jobs', jobs);
+const training = require('./routes/training');
+app.use('/api', training);
 
- app.get('/api/health', (req, res) => {
-    let python = '';
-    try {
-      const out = require('child_process').spawnSync(
-        process.env.COQUI_PY || 'python3',
-        ['-c', "import sys,json; print(json.dumps({'python': sys.version.split()[0]}))"]
-      );
-      python = JSON.parse(out.stdout.toString()).python;
-    } catch (e) {
-      python = 'unknown';
-    }
-    res.json({ ok: true, versions: { node: process.version, python } });
-  });
+const loadQueueFeatures = () => {
+  require('./workers/train');
+  require('./workers/prep');
+  const jobs = require('./routes/jobs');
+  app.use('/api/jobs', jobs);
+};
 
-  app.get('/metrics', async (req, res) => {
-    res.set('Content-Type', client.register.contentType);
-    res.end(await client.register.metrics());
-  });
+if (process.env.ENABLE_REDIS === 'true') {
+  loadQueueFeatures();
+} else if (redis) {
+  redis
+    .ping()
+    .then(loadQueueFeatures)
+    .catch((err) => {
+      logger.warn(`Redis not available, queue features disabled: ${err.message}`);
+    });
+} else {
+  logger.warn('Redis not available, queue features disabled');
+}
+
+app.get('/api/health', (req, res) => {
+  let python = '';
+  try {
+    const out = require('child_process').spawnSync(
+      process.env.COQUI_PY || 'python3',
+      ['-c', "import sys,json; print(json.dumps({'python': sys.version.split()[0]}))"]
+    );
+    python = JSON.parse(out.stdout.toString()).python;
+  } catch (e) {
+    python = 'unknown';
+  }
+  res.json({ ok: true, versions: { node: process.version, python } });
+});
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

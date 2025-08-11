@@ -5,6 +5,12 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+if (!connection) {
+  logger.warn('Redis connection not available, train worker disabled');
+  module.exports = null;
+  return;
+}
+
 const worker = new Worker(
   'train',
   async (job) => {
