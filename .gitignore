@@ -12,3 +12,4 @@ runs/*
 
 logs/*
 !logs/.gitkeep
+__pycache__/
