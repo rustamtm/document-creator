@@ -10,7 +10,11 @@ const rateLimit = require('express-rate-limit');
 const client = require('prom-client');
 const { logger, requestIdMiddleware, httpLogger } = require('./utils/logger');
 const redis = require('./queues/redis');
+const { validateEnv } = require('./utils/env');
+const { getPython } = require('./utils/python');
+const cache = require('./utils/cache');
 
+validateEnv();
 const app = express();
 app.use(requestIdMiddleware);
 app.use(httpLogger);
@@ -58,18 +62,31 @@ app.post('/convert', upload.single('file'), (req, res) => {
     return res.status(400).send('No file uploaded');
   }
   const outputExt = direction === 'to-md' ? '.md' : '.docx';
+  const buffer = fs.readFileSync(file.path);
+  if (process.env.ENABLE_CONVERT_CACHE === 'true') {
+    const cached = cache.get(buffer, outputExt);
+    if (cached) {
+      if (direction === 'to-md') {
+        return res.json({ content: cached.toString('utf8') });
+      }
+      const tmp = path.join('uploads', file.filename + outputExt);
+      fs.writeFileSync(tmp, cached);
+      return res.download(tmp, 'output.docx');
+    }
+  }
   const outputPath = path.join('uploads', file.filename + outputExt);
-
   const args = ['docx_md_roundtrip.py', direction, file.path, '-o', outputPath];
-
-  const py = spawn('python3', args);
+  const py = spawn(getPython('COQUI_PY'), args);
   py.on('close', (code) => {
     if (code !== 0) {
       return res.status(500).send('Conversion failed');
     }
+    const data = fs.readFileSync(outputPath);
+    if (process.env.ENABLE_CONVERT_CACHE === 'true') {
+      cache.set(buffer, outputExt, data);
+    }
     if (direction === 'to-md') {
-      const text = fs.readFileSync(outputPath, 'utf8');
-      res.json({ content: text });
+      res.json({ content: data.toString('utf8') });
     } else {
       res.download(outputPath, 'output.docx');
     }
@@ -87,7 +104,7 @@ app.post('/api/tts', (req, res) => {
     return res.status(500).send('Model paths not configured');
   }
   const outputFile = path.join('media', `tts_${Date.now()}.wav`);
-  const python = process.env.COQUI_PY || 'python3';
+  const python = getPython('COQUI_PY');
   const args = ['scripts/run_xtts.py', '--text', text, '--out', outputFile, '--model-path', modelPath, '--config-path', configPath];
   if (process.env.TTS_DEESSER === '1' || process.env.TTS_DEESSER === 'true') {
     args.push('--deesser');
@@ -131,7 +148,7 @@ app.get('/api/health', (req, res) => {
   let python = '';
   try {
     const out = require('child_process').spawnSync(
-      process.env.COQUI_PY || 'python3',
+      getPython('COQUI_PY'),
       ['-c', "import sys,json; print(json.dumps({'python': sys.version.split()[0]}))"]
     );
     python = JSON.parse(out.stdout.toString()).python;
@@ -147,6 +164,10 @@ app.get('/metrics', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;

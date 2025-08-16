@@ -2,6 +2,40 @@
 
 Web interface for converting DOCX and Markdown files. This repository also contains helper scripts for training and running a custom Coqui XTTS voice.
 
+## Quick start
+
+### macOS/Linux
+
+```bash
+git clone <repo>
+cd document-creator
+npm install
+PORT=3000 npm start
+
+# run tests
+npm test
+```
+
+### Windows (PowerShell)
+
+```powershell
+git clone <repo>
+cd document-creator
+npm install
+$env:PORT=3000; npm start
+
+# run tests
+npm test
+```
+
+The server chooses the correct Python interpreter automatically. On Windows it looks for `venv\Scripts\python.exe`; on Unix it uses `python3`.
+
+## Architecture
+
+The Node.js server (`server.js`) serves the static UI from `public/` and exposes API routes under `/api/*`. Heavy work such as file conversion or TTS is delegated to Python scripts via child processes. Generated media lives in `media/`, uploads in `uploads/`, and training runs in `runs/`.
+
+The optional conversion cache can be enabled with `ENABLE_CONVERT_CACHE=true` to reuse results for identical inputs.
+
 ## TTS utilities
 
 - `scripts/prep_xtts_data.py` – prepare and normalize audio data and create metadata CSVs.
