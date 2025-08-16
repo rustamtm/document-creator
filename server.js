@@ -13,6 +13,9 @@ const redis = require('./queues/redis');
 const { validateEnv } = require('./utils/env');
 const { getPython } = require('./utils/python');
 const cache = require('./utils/cache');
+const uploadController = require('./controllers/uploadController');
+const transcriptionController = require('./controllers/transcriptionController');
+const projectTreeController = require('./controllers/projectTreeController');
 
 validateEnv();
 const app = express();
@@ -54,6 +57,13 @@ const apiKeyMiddleware = (req, res, next) => {
 };
 
 app.use('/api', apiKeyMiddleware);
+
+app.post('/api/upload/audio', upload.single('audio'), uploadController.uploadAudio);
+app.post('/api/upload', upload.single('file'), uploadController.handleUpload);
+app.post('/api/transcription/run', transcriptionController.runTranscription);
+app.post('/api/transcription/full', transcriptionController.fullTranscription);
+app.get('/api/tree', projectTreeController.getTree);
+app.get('/api/projects', projectTreeController.listProjects);
 
 app.post('/convert', upload.single('file'), (req, res) => {
   const file = req.file;
