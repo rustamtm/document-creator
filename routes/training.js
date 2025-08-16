@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const rateLimit = require('express-rate-limit');
 const AdmZip = require('adm-zip');
 const crypto = require('crypto');
+const { getPython } = require('../utils/python');
 
 const router = express.Router();
 
@@ -87,7 +88,7 @@ router.post('/data/prep', async (req, res) => {
     maxLen,
     vad,
   } = req.body;
-  const python = process.env.TRAIN_PY || 'python3';
+  const python = getPython('TRAIN_PY');
   const args = [
     'scripts/prep_xtts_data.py',
     '--input-dir',
@@ -125,7 +126,7 @@ router.post('/data/prep', async (req, res) => {
 
 router.post('/train/start', (req, res) => {
   const { configPath, runName } = req.body;
-  const python = process.env.TRAIN_PY || 'python3';
+  const python = getPython('TRAIN_PY');
   const jobId = crypto.randomUUID();
   const logPath = path.join('logs', `train-${jobId}.log`);
   const logStream = fs.createWriteStream(logPath);
@@ -221,7 +222,7 @@ router.get('/artifacts', (req, res) => {
 });
 
 router.get('/system/gpu', (req, res) => {
-  const python = process.env.TRAIN_PY || 'python3';
+  const python = getPython('TRAIN_PY');
   const code =
     "import torch, json; print(json.dumps({'cuda': torch.cuda.is_available(), 'cuda_version': getattr(torch.version, 'cuda', None), 'torch_version': torch.__version__}))";
   const child = spawn(python, ['-c', code]);
