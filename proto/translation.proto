@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package doccreator;
+
+service TranslationService {
+  rpc Translate (TranslateRequest) returns (TranslateResponse);
+}
+
+message TranslateRequest {
+  string text = 1;
+  string target_language = 2;
+}
+
+message TranslateResponse {
+  string text = 1;
+}

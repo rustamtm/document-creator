@@ -8,7 +8,8 @@
     "test": "node --test && npx playwright test",
     "dev": "nodemon server.js",
     "prep": "node scripts/run-prep.js",
-    "start-train": "node scripts/run-train.js"
+    "start-train": "node scripts/run-train.js",
+    "python-service": "python3 python-services/app.py"
   },
   "keywords": [],
   "author": "",
@@ -29,7 +30,10 @@
     "winston-daily-rotate-file": "^4.7.1",
     "morgan": "^1.10.0",
     "prom-client": "^14.2.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "@grpc/grpc-js": "^1.9.7",
+    "google-protobuf": "^3.21.2",
+    "@grpc/proto-loader": "^0.7.7"
   },
   "devDependencies": {
     "eslint": "^8.57.0",

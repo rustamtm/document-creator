@@ -14,6 +14,9 @@ PORT=3000 npm start
 
 # run tests
 npm test
+
+# start Python gRPC server
+npm run python-service
 ```
 
 ### Windows (PowerShell)
@@ -26,6 +29,9 @@ $env:PORT=3000; npm start
 
 # run tests
 npm test
+
+# start Python gRPC server
+npm run python-service
 ```
 
 The server chooses the correct Python interpreter automatically. On Windows it looks for `venv\Scripts\python.exe`; on Unix it uses `python3`.
@@ -33,6 +39,8 @@ The server chooses the correct Python interpreter automatically. On Windows it l
 ## Architecture
 
 The Node.js server (`server.js`) serves the static UI from `public/` and exposes API routes under `/api/*`. Heavy work such as file conversion or TTS is delegated to Python scripts via child processes. Generated media lives in `media/`, uploads in `uploads/`, and training runs in `runs/`.
+
+The Python service in `python-services/app.py` now exposes gRPC endpoints for translation and text-to-speech alongside a small FastAPI app. The Node.js helper `utils/pythonService.js` talks to these gRPC services.
 
 The optional conversion cache can be enabled with `ENABLE_CONVERT_CACHE=true` to reuse results for identical inputs.
 
