@@ -46,12 +46,21 @@ def normalize(segment: AudioSegment, target_dbfs: float = -20.0) -> AudioSegment
     return segment.apply_gain(change)
 
 
-TARGET_SAMPLE_RATE = 22050
+DEFAULT_SAMPLE_RATE = 22050
 
 
-def save_audio(segment: AudioSegment, path: Path) -> None:
+def save_audio(segment: AudioSegment, path: Path, sample_rate: int) -> None:
+    """Save *segment* to *path* using the given *sample_rate*.
+
+    The previous implementation relied on a module level constant which made it
+    impossible to override the output sample rate from the command line.  The
+    worker that invokes this script already passes a `--sample-rate` argument
+    when provided, so we expose the value here to correctly resample the
+    exported audio.
+    """
+
     segment = (
-        segment.set_frame_rate(TARGET_SAMPLE_RATE)
+        segment.set_frame_rate(sample_rate)
         .set_channels(1)
         .set_sample_width(2)
     )
@@ -102,7 +111,7 @@ def main(args: argparse.Namespace) -> None:
             for chunk, chunk_text in maybe_split(audio_path, args.max_len, model, text):
                 chunk = normalize(chunk)
                 out_path = wav_dir / f"{index:04d}.wav"
-                save_audio(chunk, out_path)
+                save_audio(chunk, out_path, args.sample_rate)
                 writer.writerow([f"wavs/{out_path.name}", chunk_text or text, args.speaker, args.language])
                 index += 1
     print(f"Wrote {index-1} clips to {metadata_path}")
@@ -115,6 +124,7 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", required=True, help="Output dataset directory")
     parser.add_argument("--speaker", default="spk1", help="Speaker id")
     parser.add_argument("--language", default="en", help="Language code")
+    parser.add_argument("--sample-rate", type=int, default=DEFAULT_SAMPLE_RATE, help="Target sample rate in Hz")
     parser.add_argument("--max-len", type=float, default=15.0, help="Max clip length in seconds")
     parser.add_argument("--vad", action="store_true", help="Use VAD to split long files")
     main(parser.parse_args())
