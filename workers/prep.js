@@ -28,11 +28,12 @@ const worker = new Worker(
       speaker,
       '--language',
       language,
-      '--sample-rate',
-      String(sampleRate),
       '--max-len',
       String(maxLen || 15),
     ];
+    if (typeof sampleRate === 'number') {
+      args.push('--sample-rate', String(sampleRate));
+    }
     if (vad) args.push('--vad');
 
     const logDir = path.join('logs', 'jobs');
